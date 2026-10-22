@@ -14,6 +14,6 @@ st.subheader("Sales Records")
 st.dataframe(df, use_container_width=True)
 
 st.subheader("Sales by Region")
-st.bar_chart(df, x="Region", y="Sales")
+st.pie_chart(df, x="Region", y="Sales")
 
 st.metric("Total Sales", f"{df['Sales'].sum():,}")
