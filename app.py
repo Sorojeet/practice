@@ -2,7 +2,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="My First App",
+    page_title="🚀 My First App",
     page_icon="🚀",
     layout="wide"
 )
