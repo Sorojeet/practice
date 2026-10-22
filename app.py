@@ -1,22 +1,19 @@
 
 import streamlit as st
+import pandas as pd
 
-st.set_page_config(
-    page_title="My First App",
-    page_icon="🚀",
-    layout="wide"
-)
+st.title("Sales Dashboard")
 
-st.title("My First Streamlit App")
+df = pd.DataFrame({
+    "Region": ["North", "South", "East", "West"],
+    "Sales": [12000, 18000, 9000, 15000],
+    "Orders": [120, 180, 90, 150]
+})
 
-st.write("Welcome! I am learning to build web applications with Python.")
+st.subheader("Sales Records")
+st.dataframe(df, use_container_width=True)
 
-st.header("User Information")
+st.subheader("Sales by Region")
+st.bar_chart(df, x="Region", y="Sales")
 
-name = st.text_input("Enter your name")
-age = st.slider("Select your age", 18, 80, 25)
-
-if st.button("Submit"):
-    st.success(f"Hello {name}! You are {age} years old.")
-
-st.info("This application was built entirely with Python.")
+st.metric("Total Sales", f"{df['Sales'].sum():,}")
