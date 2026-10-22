@@ -1,7 +1,10 @@
 import streamlit as st
 
-col1, col2, col3 = st.columns(3)
+st.sidebar.title("Dashboard Filters")
 
-col1.metric("Total Sales", "₹85,000", "-12%")
-col2.metric("Total Orders", "850", "+8%")
-col3.metric("Refunds", "₹2,500", "-3%")
+region = st.sidebar.selectbox(
+    "Select Region",
+    ["All", "North", "South", "East", "West"]
+)
+
+st.write("Selected region:", region)
