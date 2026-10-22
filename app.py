@@ -1,39 +1,7 @@
-
 import streamlit as st
 
-st.set_page_config(
-    page_title="Lesson 2",
-    page_icon="🎯",
-    layout="wide"
-)
+col1, col2, col3 = st.columns(3)
 
-st.title("Lesson 2: Interactive Widgets")
-
-name = st.text_input("Enter your name")
-
-region = st.selectbox(
-    "Choose a region",
-    ["North", "South", "East", "West"]
-)
-
-departments = st.multiselect(
-    "Choose departments",
-    ["Sales", "Finance", "IT", "Operations"]
-)
-
-amount = st.slider(
-    "Select an amount",
-    min_value=0,
-    max_value=100000,
-    value=25000,
-    step=5000
-)
-
-approved = st.checkbox("Approved")
-
-if st.button("Show Details"):
-    st.write("Name:", name)
-    st.write("Region:", region)
-    st.write("Departments:", departments)
-    st.write("Amount:", amount)
-    st.write("Approved:", approved)
+col1.metric("Total Sales", "₹85,000", "+12%")
+col2.metric("Total Orders", "850", "+8%")
+col3.metric("Refunds", "₹2,500", "-3%")
