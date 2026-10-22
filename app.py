@@ -11,7 +11,7 @@ df = pd.DataFrame({
 })
 
 st.subheader("Sales Records")
-st.dataframe(df, use_container_width=True)
+st.write(df, use_container_width=True)
 
 st.subheader("Sales by Region")
 st.bar_chart(df, x="Region", y="Sales")
