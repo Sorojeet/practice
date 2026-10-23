@@ -32,8 +32,10 @@ with col5:
     st.empty()
 if btn1:
     st.write("### Preview")
+    st.caption(f'Showing {len(df)} out of {len(df)} rows')
     st.dataframe(df,hide_index=True)
 elif btn2:
     df_filtered=df[df[column]==val]
     st.write("### Filtered Results")
+    st.caption(f'Showing {len(df_filtered)} out of {len(df)} rows')
     st.dataframe(df_filtered,hide_index=True)
