@@ -14,5 +14,5 @@ if st.button("View Excel File") and uploaded_file is not None:
     df=pl.read_excel(uploaded_file,sheet_name=sheet)
     df=df.to_pandas()
     st.dataframe(df,hide_index=True,width=10000)
-elif uploaded_file is None:
+else:
     st.warning("Please upload an Excel file to view its contents.")
