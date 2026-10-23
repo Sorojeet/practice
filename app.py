@@ -1,80 +1,16 @@
 
 import streamlit as st
 import pandas as pd
-
-st.set_page_config(
-    page_title="Sales Analytics",
-    page_icon="📊",
-    layout="wide"
-)
-
-st.title("📊 Sales Analytics Dashboard")
-st.caption("Lesson 2 — Widgets and Layouts")
-
-# Sample dataset
-df = pd.DataFrame({
-    "Region": [
-        "North", "South", "East", "West",
-        "North", "South", "East", "West"
-    ],
-    "Sales": [
-        12000, 18000, 9000, 15000,
-        14000, 17000, 11000, 21000
-    ],
-    "Orders": [120, 180, 90, 150, 140, 170, 110, 210]
-})
-
-# Sidebar
-st.sidebar.header("Filters")
-
-regions = st.sidebar.multiselect(
-    "Select regions",
-    options=sorted(df["Region"].unique()),
-    default=sorted(df["Region"].unique())
-)
-
-min_sales = st.sidebar.slider(
-    "Minimum sales",
-    min_value=0,
-    max_value=int(df["Sales"].max()),
-    value=0,
-    step=1000
-)
-
-# Apply filters
-filtered = df[
-    df["Region"].isin(regions)
-    & (df["Sales"] >= min_sales)
-]
-
-# KPI metrics
-total_sales = filtered["Sales"].sum()
-total_orders = filtered["Orders"].sum()
-total_records = len(filtered)
-
-c1, c2, c3 = st.columns(3)
-
-c1.metric("Total Sales", f"₹{total_sales:,.0f}")
-c2.metric("Total Orders", f"{total_orders:,}")
-c3.metric("Records", f"{total_records:,}")
-
-# Tabs
-tab1, tab2 = st.tabs(["📈 Chart", "📋 Data"])
-
-with tab1:
-    chart_data = (
-        filtered.groupby("Region", as_index=False)["Sales"]
-        .sum()
-    )
-
-    st.bar_chart(chart_data, x="Region", y="Sales")
-
-with tab2:
-    st.dataframe(filtered, use_container_width=True)
-
-    st.download_button(
-        "Download filtered CSV",
-        data=filtered.to_csv(index=False).encode("utf-8-sig"),
-        file_name="filtered_sales.csv",
-        mime="text/csv"
-    )
+import polars as pl
+st.set_page_config(page_title="Excel Viewer", page_icon=":clipboard:", layout="wide")
+st.sidebar.title("Excel Viewer")
+st.sidebar.write("Upload your Excel file to view its contents")
+uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx", "xls"])
+st.sidebar.write("You can upload an Excel file to view its contents.")
+#selected_option = st.sidebar.slider("Slide the header row (0-indexed)", min_value=0, max_value=10, value=0, step=1)
+if st.sidebar.button("View Excel File") and uploaded_file is not None:
+    df=pl.read_excel(uploaded_file)
+    df=df.to_pandas()
+    st.dataframe(df,hide_index=True,width=10000)
+elif uploaded_file is None:
+    st.warning("Please upload an Excel file to view its contents.")
