@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="toolhead"><h1>Compare Files</h1><p class="muted">Find what changed between two spreadsheets. See added, removed and changed rows, with every changed cell shown as old and new value.</p></section>
+<div class="cols2"><div id="upA"></div><div id="upB"></div></div>
+<section id="opts" class="glass panel" hidden aria-labelledby="oh">
+  <h2 id="oh">How should rows be matched?</h2>
+  <p class="muted" id="shared"></p>
+  <div class="field"><span class="lab">Key columns (an ID that identifies a row). Leave empty to match row 1 with row 1, row 2 with row 2, and so on.</span><div class="frow" id="keys"></div></div>
+  <div class="field"><span class="lab">Columns to ignore</span><div class="frow" id="ignore"></div></div>
+  <div class="frow"><label class="chk"><input type="checkbox" id="trim" checked> Ignore spaces at the start and end</label><label class="chk"><input type="checkbox" id="icase"> Ignore upper and lower case</label></div>
+  <div class="frow"><button id="go" class="btn primary">Compare files</button></div>
+</section>
+<section id="results" hidden aria-labelledby="rh">
+  <div class="glass panel"><h2 id="rh">Differences</h2><div class="metrics" id="metrics"></div><ul id="notes" class="notes"></ul><div id="coldiff"></div>
+    <div class="frow"><button id="dxlsx" class="btn primary">Download full report (xlsx)</button><button id="dcsv" class="btn">Download csv</button></div></div>
+  <nav id="tabs" class="tabs" role="tablist" aria-label="Difference type"></nav>
+  <div class="glass gridwrap"><div class="scroll"><table id="grid"></table></div><footer id="note" class="muted"></footer></div>
+</section>
+<section class="howto"><h2>How Compare Files works</h2>
+  <ol><li>Upload the original file as A and the new version as B.</li><li>Choose key columns such as an ID, or compare by row position.</li><li>Review added, removed and changed rows, then download an Excel report with a summary and one sheet per difference type.</li></ol>
+  <p class="muted">Numbers are compared as numbers, so 1 and 1.0 match. Only columns with the same name in both files are compared.</p></section>
+{% endblock %}
+{% block scripts %}<script src="/static/tools.js?v={{ v }}"></script><script src="/static/compare-files.js?v={{ v }}"></script>{% endblock %}

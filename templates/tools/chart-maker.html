@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="toolhead"><h1>Chart Maker</h1><p class="muted">Turn spreadsheet columns into a chart. Pick the columns, choose how to combine values, and download the chart as an image.</p></section>
+<div id="up"></div>
+<div id="work" hidden>
+  <section class="glass panel controls" aria-label="Chart settings">
+    <label>Chart type <select id="type"><option value="bar">Bar</option><option value="hbar">Horizontal bar</option><option value="line">Line</option><option value="area">Area</option><option value="pie">Pie</option><option value="donut">Donut</option><option value="scatter">Scatter</option><option value="hist">Histogram</option></select></label>
+    <label id="xl">X axis (categories) <select id="x"></select></label>
+    <div class="fld" id="yw"><span class="lab">Values (Y axis)</span><div class="frow" id="ys"></div></div>
+    <label id="aggw">Combine values with <select id="agg"><option value="sum">Sum</option><option value="avg">Average</option><option value="min">Minimum</option><option value="max">Maximum</option><option value="count">Count of rows</option><option value="countd">Count of distinct values</option></select></label>
+    <label id="gw">Split into series by <select id="group"></select></label>
+    <label id="pw">Group dates by <select id="part"><option value="">Exact date</option><option value="year">Year</option><option value="quarter">Quarter</option><option value="month">Month</option><option value="day">Day</option></select></label>
+    <label id="sw">Sort <select id="sort"><option value="x">By X axis</option><option value="value_desc">Largest first</option><option value="value_asc">Smallest first</option></select></label>
+    <label id="lw">Max categories <input type="number" id="limit" min="1" max="500" value="30"></label>
+    <label id="bw">Number of bins <input type="number" id="bins" min="2" max="100" value="20"></label>
+    <label>Title <input type="text" id="title" placeholder="Automatic title" maxlength="120"></label>
+    <label>Colors <select id="pal"><option>Gridglass</option><option>Ocean</option><option>Sunset</option></select></label>
+    <div class="fld"><span class="lab">Options</span><div class="frow"><label class="chk" id="stw"><input type="checkbox" id="stacked"> Stacked</label><label class="chk"><input type="checkbox" id="values"> Value labels</label><label class="chk"><input type="checkbox" id="legend" checked> Legend</label></div></div>
+  </section>
+  <section class="glass chartbox" aria-label="Chart"><div id="chart" aria-live="polite"></div><p class="muted" id="cnote"></p>
+    <div class="frow"><button class="btn primary" id="dpng">Download PNG</button><button class="btn" id="dsvg">Download SVG</button><button class="btn" id="dcsv">Download data (csv)</button></div></section>
+</div>
+<section class="howto"><h2>How the Chart Maker works</h2>
+  <ol><li>Upload an Excel or CSV file and pick the sheet.</li><li>Choose a chart type, the X column and the value columns. Add a series column to split values into groups.</li><li>Download the finished chart as PNG or SVG, or export the chart data as csv.</li></ol>
+  <p class="muted">Date columns can be grouped by year, quarter, month or day. Large tables are summarised on the server, so the chart stays fast.</p></section>
+{% endblock %}
+{% block scripts %}<script src="/static/tools.js?v={{ v }}"></script><script src="/static/chart-maker.js?v={{ v }}"></script>{% endblock %}

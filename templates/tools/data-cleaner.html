@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="toolhead"><h1>Data Cleaner</h1><p class="muted">Fix messy Excel and CSV data in a few clicks. Build a list of cleaning steps, check the preview, then download the tidy file.</p></section>
+<div id="up"></div>
+<div id="work" hidden>
+  <div class="glass panel" id="colsum"></div>
+  <section class="glass panel" aria-labelledby="stepsh">
+    <h2 id="stepsh">Cleaning steps</h2>
+    <div class="frow"><select id="addOp" aria-label="Add a step"></select><button id="quick" class="btn">Quick clean preset</button></div>
+    <div id="steps"></div>
+    <div class="frow"><button id="run" class="btn primary">Apply steps</button><button id="clear" class="btn">Clear steps</button></div>
+    <small class="muted">Steps run from top to bottom. Your original file is never changed.</small>
+  </section>
+  <section id="results" hidden aria-labelledby="resh">
+    <div class="glass panel"><h2 id="resh">Result</h2><div class="metrics" id="sum"></div><div id="log"></div>
+      <div class="frow"><button id="dxlsx" class="btn primary">Download xlsx</button><button id="dcsv" class="btn">Download csv</button></div></div>
+    <div class="glass gridwrap"><div class="scroll"><table id="grid"></table></div><footer id="note" class="muted"></footer></div>
+  </section>
+</div>
+<section class="howto"><h2>How the Data Cleaner works</h2>
+  <ol><li>Upload an Excel or CSV file and pick the sheet.</li><li>Add steps: trim spaces, remove duplicates and empty rows, fix text case, fill missing values, find and replace, convert types or tidy column names.</li><li>Apply the steps, read what changed in each step, and download the cleaned file as xlsx or csv.</li></ol>
+  <p class="muted">Files are processed in memory and are not stored. Sheets up to {{ "{:,}".format(max_rows) }} rows are supported on the default settings.</p></section>
+{% endblock %}
+{% block scripts %}<script src="/static/tools.js?v={{ v }}"></script><script src="/static/data-cleaner.js?v={{ v }}"></script>{% endblock %}

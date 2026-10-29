@@ -1,5 +1,8 @@
-streamlit
+flask
+gunicorn
 polars
+duckdb
+pyarrow
 fastexcel
-pandas
-openpyxl
+xlsxwriter
+reportlab
