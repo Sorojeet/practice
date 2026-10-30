@@ -1,42 +1,18 @@
 {% extends "base.html" %}
-{% block actions %}
-  <label class="btn primary">Open file<input id="file" type="file" accept=".xlsx,.xlsm,.xls,.xlsb,.ods,.csv,.tsv,.txt" hidden></label>
-  <button id="closeBtn" class="btn" hidden>Close file</button>
-  <span class="grow"></span>
-  <details id="exp" class="menu" hidden><summary class="btn">Export</summary>
-    <div class="glass pop">
-      <label><input type="radio" name="scope" value="view" checked> Current view</label>
-      <label><input type="radio" name="scope" value="full"> Full sheet</label>
-      <div class="row"><button class="btn" data-fmt="xlsx">xlsx</button><button class="btn" data-fmt="csv">csv</button><button class="btn" data-fmt="pdf" id="pdfBtn">pdf</button></div>
-      <small class="muted">PDF is available for grouped summaries.</small>
-    </div></details>
-{% endblock %}
 {% block content %}
-  <section id="drop" class="hero">
-    <div id="dz" class="glass drop"><h1>Drop a spreadsheet here</h1><p>Excel files open with every sheet on its own tab. CSV delimiters are detected for you.</p>
-      <div class="row"><button class="btn primary" id="pick">Choose a file</button><button class="btn" id="sample">Try sample data</button></div></div>
-    <div class="feats">
-      <article class="glass feat"><h3>View and filter</h3><p>Search every column, combine conditions with AND and OR, and pick values from an Excel-style list.</p></article>
-      <article class="glass feat"><h3>Pivot tables</h3><p>Choose rows, columns and a total, and switch grand totals on or off.</p></article>
-      <article class="glass feat"><h3>Export</h3><p>Download xlsx or csv of the current view or the full sheet, and pdf for pivot tables.</p></article>
-    </div>
-    <p class="muted fine">Supports xlsx, xls, csv and tsv. Files stay in memory and are discarded when you close them.</p>
-  </section>
-  <section id="app" hidden>
-    <div id="stats" class="stats"></div>
-    <nav id="tabs" class="tabs" aria-label="Sheets"></nav>
-    <div class="glass tools">
-      <input id="search" type="search" placeholder="Search all columns">
-      <button id="bF" class="btn">Filters</button><button id="bP" class="btn">Pivot</button>
-      <label class="muted">Header row <input id="hdr" type="number" min="1" value="1"></label><span class="grow"></span><span id="count" class="muted" aria-live="polite"></span>
-    </div>
-    <div id="pF" class="glass panel" hidden>
-      <div id="fconds"></div>
-      <div id="fvals" class="vals"><div class="frow"><b>Pick values</b><select id="vcol" aria-label="Column"></select><input id="vq" type="search" placeholder="Search values"><button class="btn" id="vall">Select all</button><button class="btn" id="vnone">Deselect all</button></div><div id="vlist" class="vlist"></div></div>
-    </div>
-    <div id="pP" class="glass panel" hidden></div>
-    <div class="glass gridwrap"><div class="scroll"><table id="grid"></table></div><footer id="pager"></footer></div>
-  </section>
+  <section class="toolhead"><h1>Spreadsheet tools in your browser</h1><p class="muted">View, clean, compare and chart Excel and CSV files. Upload a file once and every tool works on it.</p></section>
 {% include "_cards.html" %}
+  <section id="hero" class="hero">
+    <div class="glass drop">
+      <h2>Upload your file</h2>
+      <p>It stays open while you move between the tools, so you never upload it twice.</p>
+      <div id="up"></div>
+      <div class="row"><button class="btn" id="sample">Try sample data</button></div>
+    </div>
+  </section>
+  <section id="ready" class="glass ready" hidden aria-live="polite">
+    <div><b>Your file is open.</b> <span id="readyinfo" class="muted"></span><br><span class="muted">Choose a tool above. It opens with this file.</span></div>
+    <div class="frow"><button class="btn small" id="rAdd">Add another file</button><button class="btn small" id="rRm">Remove file</button></div>
+  </section>
 {% endblock %}
-{% block scripts %}<script src="/static/app.js?v={{ v }}"></script>{% endblock %}
+{% block scripts %}<script src="/static/home.js?v={{ v }}"></script>{% endblock %}

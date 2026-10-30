@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block actions %}
+  <details id="exp" class="menu" hidden><summary class="btn">Export</summary>
+    <div class="glass pop">
+      <label><input type="radio" name="scope" value="view" checked> Current view</label>
+      <label><input type="radio" name="scope" value="full"> Full sheet</label>
+      <div class="row"><button class="btn" data-fmt="xlsx">xlsx</button><button class="btn" data-fmt="csv">csv</button><button class="btn" data-fmt="pdf" id="pdfBtn">pdf</button></div>
+      <small class="muted">PDF is available for grouped summaries.</small>
+    </div></details>
+{% endblock %}
+{% block content %}
+  <section class="toolhead"><h1>Spreadsheet Viewer</h1><p class="muted">Search, filter and summarize your sheet, then export what you see. Uses the file you opened, so there is nothing to upload twice.</p></section>
+  <div id="up"></div>
+  <section id="app" hidden>
+    <div id="stats" class="stats"></div>
+    <div class="glass tools">
+      <input id="search" type="search" placeholder="Search all columns">
+      <button id="bF" class="btn">Filters</button><button id="bP" class="btn">Pivot</button>
+      <span class="grow"></span><span id="count" class="muted" aria-live="polite"></span>
+    </div>
+    <div id="pF" class="glass panel" hidden>
+      <div id="fconds"></div>
+      <div id="fvals" class="vals"><div class="frow"><b>Pick values</b><select id="vcol" aria-label="Column"></select><input id="vq" type="search" placeholder="Search values"><button class="btn" id="vall">Select all</button><button class="btn" id="vnone">Deselect all</button></div><div id="vlist" class="vlist"></div></div>
+    </div>
+    <div id="pP" class="glass panel" hidden></div>
+    <div class="glass gridwrap"><div class="scroll"><table id="grid"></table></div><footer id="pager"></footer></div>
+  </section>
+  <section class="howto"><h2>How the viewer works</h2>
+    <ol><li>Open an Excel or CSV file once. It stays open on every page.</li><li>Search all columns, add filter conditions or pick values from an Excel-style list.</li><li>Build a pivot table with rows, columns and totals, then export to xlsx, csv or pdf.</li></ol></section>
+{% endblock %}
+{% block scripts %}<script src="/static/app.js?v={{ v }}"></script>{% endblock %}

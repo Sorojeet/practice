@@ -13,6 +13,12 @@ HOME = {
 }
 
 TOOLS = [
+    {"slug": "viewer", "name": "Spreadsheet Viewer", "path": "/viewer", "template": "viewer.html", "ready": True,
+     "tagline": "Open a sheet, search and filter it, build pivot tables and export to xlsx, csv or pdf.",
+     "title": "Excel and CSV Viewer – Search, Filter and Pivot Tables Online | Gridglass",
+     "description": "View Excel and CSV files in your browser. Search every column, filter with Excel-style value lists, "
+                    "build pivot tables and export the result to xlsx, csv or pdf.",
+     "icon": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/>'},
     {"slug": "data-cleaner", "name": "Data Cleaner", "ready": True,
      "tagline": "Trim spaces, remove duplicates and empty rows, fix case, fill gaps and convert types.",
      "title": "Data Cleaner – Clean Excel and CSV Data Online | Gridglass",
@@ -35,6 +41,11 @@ TOOLS = [
     {"slug": "data-profiler", "name": "Data Profiler", "ready": False, "tagline": "", "title": "", "description": "", "icon": ""},
     {"slug": "report-generator", "name": "Report Generator", "ready": False, "tagline": "", "title": "", "description": "", "icon": ""},
 ]
+
+
+for _t in TOOLS:  # every page has a path and a template unless it says otherwise
+    _t.setdefault("path", f"/tools/{_t['slug']}")
+    _t.setdefault("template", f"tools/{_t['slug']}.html")
 
 
 def ready_tools():

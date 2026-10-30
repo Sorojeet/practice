@@ -5,7 +5,7 @@ const debounce = (fn, ms = 250) => { let t; return (...a) => { clearTimeout(t); 
 const post = (url, body) => fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
 
 // error and info banner with a close button
-const msg = t => { clearTimeout(msg.t); $('#mtext').textContent = t || ''; $('#msg').hidden = !t; if (t) msg.t = setTimeout(() => msg(''), 10000); };
+const msg = (t, ok = false) => { clearTimeout(msg.t); $('#mtext').textContent = t || ''; $('#msg').classList.toggle('ok', ok); $('#msg').hidden = !t; if (t) msg.t = setTimeout(() => msg(''), 10000); };
 $('#mclose').onclick = () => msg('');
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { msg(''); closeMenu(); } });
 
@@ -35,4 +35,12 @@ function sendForm(url, fd) {  // XHR, because fetch cannot report upload progres
     x.onerror = () => rej(new Error('network'));
     x.send(fd);
   });
+}
+
+async function api(url, body) {  // JSON call that shows server errors in the banner; resolves null on failure
+  try {
+    const r = await post(url, body), j = await r.json();
+    if (!r.ok) { msg(j.error || 'Something went wrong.'); return null; }
+    return j;
+  } catch (e) { msg('Could not reach the server. Check that it is still running.'); return null; }
 }

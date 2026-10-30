@@ -117,3 +117,25 @@ td.chg{background:rgba(240,160,48,.14)}td.chg del{color:#d9534f;text-decoration:
 @media(max-width:900px){.cols2{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.toolhead h1{font-size:26px}.explore h2{font-size:21px}.chartbox{padding:10px}}
 td.chg del::after{content:' →';color:var(--mut)}
+
+/* ---- workspace bar and home ---- */
+.wsbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:end;padding:12px 16px;margin-bottom:12px}.wsbar[hidden]{display:none}
+.wsitem{display:grid;gap:3px;min-width:0}.wsitem .fn{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wsbar input[type=number]{width:84px}.wsmeta{align-self:center}.wsbtns{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.ready{padding:14px 18px;display:grid;gap:4px;margin-bottom:6px}.ready p{margin:0}
+.msg.ok{background:var(--acc)}
+.hero .drop{display:grid;gap:14px;justify-items:center}.hero .drop #up{width:100%;max-width:620px}.hero .drop .dzbox{padding:30px 20px}
+.cols2>.panel .dzbox{padding:24px 16px}
+@media(max-width:640px){.wsbtns{margin-left:0}.wsbar{gap:10px 14px}}
+
+/* ---- compact workspace bar, frozen table header ---- */
+.btn.small{padding:4px 11px;font-size:13px;border-radius:10px;min-height:0}
+.wsbar{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:6px 12px;margin-bottom:10px;border-radius:16px;font-size:13px}
+.wsitem{display:flex;align-items:center;gap:6px;min-width:0}.wsbar .fn{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.wsbar select,.wsbar input{padding:3px 8px;font-size:13px;border-radius:8px;min-height:0}.wsbar select{max-width:200px}.wsbar input[type=number]{width:58px}
+.wsmeta{font-size:12px}.wsbtns{display:flex;gap:6px;margin-left:auto}
+:root{--th:#e8f5ed}[data-theme=dark]{--th:#0f2a1c}
+th{background:var(--th);box-shadow:0 1px 0 var(--edge);z-index:2}
+.hero{margin:26px auto 0}.hero .drop h2{margin:0;font-size:24px}.hero .drop p{margin:0}.explore{margin-top:4px}
+.ready{margin-top:26px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+@media(max-width:640px){.wsbar select,.wsbar input,.wsbar .btn{min-height:34px;font-size:16px}.wsbar .btn.small{font-size:14px}.wsbtns{margin-left:0}.wsbar input[type=number]{width:64px}}

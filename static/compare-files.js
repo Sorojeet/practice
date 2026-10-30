@@ -1,27 +1,60 @@
-// Compare Files: load two files, choose how rows are matched, then review added, removed and changed rows.
-let result = null, tab = 'changed';
-const names = u => (u && u.sheet() ? u.sheet().cols.map(c => c.name) : []);
-const common = () => names(A).filter(c => names(B).includes(c));
+// Compare Files: pick two files from the workspace (a second one can be added here), choose how rows are matched, review the differences.
+let result = null, tab = 'changed', sel = {a: null, b: null}, count = 0, sig = '';
 const keysPick = ColPicker($('#keys'), {label: 'Add key column…'});
 const ignorePick = ColPicker($('#ignore'), {label: 'Ignore a column…'});
+const meta = s => s && WS.sheetMeta(s.file, s.sheet);
+const names = s => (meta(s) ? meta(s).cols.map(c => c.name) : []);
+const common = () => names(sel.a).filter(c => names(sel.b).includes(c));
 
-function changed() {
-  result = null; $('#results').hidden = true;
-  const ready = A.info && B.info;
+function fix() {  // keep both picks valid; a newly added file becomes B
+  const F = WS.files, ok = s => s && meta(s);
+  if (!ok(sel.a)) sel.a = WS.sheetMeta() ? {file: WS.file, sheet: WS.sheet} : null;
+  if (F.length > count || !ok(sel.b) || (sel.b && sel.a && sel.b.file === sel.a.file && F.length > 1)) {
+    const other = [...F].reverse().find(f => !sel.a || f.id !== sel.a.file);
+    sel.b = other ? {file: other.id, sheet: other.sheets[0].id} : null;
+  }
+  count = F.length;
+}
+function sideHTML(key, title, hint) {
+  const s = sel[key];
+  if (!s) return `<h2>${title}</h2>` + (key === 'a' || sel.a ? `<div data-dz="${key}"></div>` : '<p class="muted">Add File A first.</p>');
+  const f = WS.fileMeta(s.file), m = meta(s);
+  return `<h2>${title}</h2><p class="muted">${hint}</p>
+  <label class="field"><span class="lab">File</span><select data-side="${key}" data-k="file">${WS.files.map(x => `<option value="${x.id}"${x.id === s.file ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+  ${f.sheets.length > 1 ? `<label class="field"><span class="lab">Sheet</span><select data-side="${key}" data-k="sheet">${f.sheets.map(x => `<option value="${x.id}"${x.id === s.sheet ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>` : ''}
+  <label class="field"><span class="lab">Header row</span><input type="number" min="1" data-side="${key}" data-k="hdr" value="${m.hdr}"${f.derived ? ' disabled' : ''}></label>
+  <p class="muted">${m.rows.toLocaleString()} rows · ${m.cols.length} columns</p>
+  <div class="frow"><button class="btn" data-add>Add another file</button></div>`;
+}
+function render() {
+  fix();
+  $('#sideA').innerHTML = sideHTML('a', 'File A: the original', 'The older or reference file.');
+  $('#sideB').innerHTML = sideHTML('b', 'File B: the new version', 'The file to compare against A.');
+  document.querySelectorAll('[data-dz]').forEach(el => WS.dropzone(el, {title: el.dataset.dz === 'a' ? 'Choose File A' : 'Choose File B', hint: 'Drop an Excel or CSV file here, or click to choose one.'}));
+  const next = JSON.stringify([sel.a, sel.b, [sel.a, sel.b].map(s => meta(s) && meta(s).hdr + names(s).join('|'))]);
+  const ready = !!(meta(sel.a) && meta(sel.b)), cm = ready ? common() : [];
   $('#opts').hidden = !ready;
+  if (next === sig) return;
+  sig = next; result = null; $('#results').hidden = true;
   if (!ready) return;
-  const cm = common();
   keysPick.set(cm, []); ignorePick.set(cm, []);
-  $('#shared').textContent = cm.length ? `${cm.length} column(s) have the same name in both files.` : 'These files share no column names, so they cannot be compared.';
+  $('#shared').textContent = !cm.length ? 'These sheets share no column names, so they cannot be compared. Check the header rows.'
+    : sel.a.file === sel.b.file && sel.a.sheet === sel.b.sheet ? 'Both sides are the same sheet. Pick a different file or sheet for one side.' : `${cm.length} column(s) have the same name in both sheets.`;
   $('#go').disabled = !cm.length;
 }
-const A = Uploader($('#upA'), {title: 'File A: the original', hint: 'The older or reference file.', onLoad: changed});
-const B = Uploader($('#upB'), {title: 'File B: the new version', hint: 'The file to compare against A.', onLoad: changed});
+WS.on(render);
+$('#sides').addEventListener('change', e => {
+  const t = e.target, side = t.dataset.side, k = t.dataset.k; if (!side) return;
+  if (k === 'file') sel[side] = {file: +t.value, sheet: WS.fileMeta(+t.value).sheets[0].id};
+  else if (k === 'sheet') sel[side].sheet = +t.value;
+  else if (k === 'hdr') return WS.setHeader(t.value, sel[side].file, sel[side].sheet);
+  render();
+});
+$('#sides').addEventListener('click', e => { if (e.target.closest('[data-add]')) WS.pick(); });
 
-const side = u => ({token: u.info.token, sheet: u.sheetName, name: u.info.name});
 $('#go').onclick = async () => {
   loadUI.show('Comparing files'); loadUI.wait('');
-  const j = await api('/api/tools/compare/run', {a: side(A), b: side(B), keys: keysPick.selected, ignore: ignorePick.selected, trim: $('#trim').checked, ignore_case: $('#icase').checked});
+  const j = await api('/api/tools/compare/run', {ws: WS.token, a: sel.a, b: sel.b, keys: keysPick.selected, ignore: ignorePick.selected, trim: $('#trim').checked, ignore_case: $('#icase').checked});
   loadUI.hide(); if (!j) return;
   result = j; msg(''); tab = j.summary.changed ? 'changed' : j.summary.added ? 'added' : 'removed'; draw();
   $('#results').hidden = false; $('#results').scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -44,5 +77,6 @@ function draw() {
   $('#dcsv').textContent = `Download ${tab} (csv)`;
 }
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (b) { tab = b.dataset.t; draw(); } });
-$('#dxlsx').onclick = () => download('/api/tools/compare/download', {token: result.token, fmt: 'xlsx', which: 'all'}, 'differences.xlsx');
-$('#dcsv').onclick = () => download('/api/tools/compare/download', {token: result.token, fmt: 'csv', which: tab}, `${tab}.csv`);
+$('#dxlsx').onclick = () => download('/api/tools/compare/download', {ws: WS.token, fmt: 'xlsx', which: 'all'}, 'differences.xlsx');
+$('#dcsv').onclick = () => download('/api/tools/compare/download', {ws: WS.token, fmt: 'csv', which: tab}, `${tab}.csv`);
+WS.init();

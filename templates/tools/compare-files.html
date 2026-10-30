@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="toolhead"><h1>Compare Files</h1><p class="muted">Find what changed between two spreadsheets. See added, removed and changed rows, with every changed cell shown as old and new value.</p></section>
-<div class="cols2"><div id="upA"></div><div id="upB"></div></div>
+<div class="cols2" id="sides"><section class="glass panel" id="sideA"></section><section class="glass panel" id="sideB"></section></div>
 <section id="opts" class="glass panel" hidden aria-labelledby="oh">
   <h2 id="oh">How should rows be matched?</h2>
   <p class="muted" id="shared"></p>

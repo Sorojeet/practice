@@ -7,13 +7,21 @@ const PALS = {
 const SINGLE_Y = ['scatter', 'pie', 'donut'];
 let data = null, svgText = '', dims = [900, 520];
 
-const up = Uploader($('#up'), {title: 'Choose a file to chart', onLoad: u => { data = null; $('#work').hidden = !u; $('#chart').innerHTML = ''; if (u) setup(); }});
+WS.dropzone($('#up'), {title: 'Choose a file to chart'});
+WS.bar($('#wsbar'));
+let seen = '';
+function render0() {  // runs whenever the workspace changes
+  const s = WS.sheetMeta(); $('#up').hidden = !!s; $('#work').hidden = !s;
+  if (WS.key() === seen) return;
+  seen = WS.key(); data = null; $('#chart').innerHTML = ''; if (s) setup();
+}
+WS.on(render0);
 const yPick = ColPicker($('#ys'), {label: 'Add value column…', onChange: s => { if (SINGLE_Y.includes($('#type').value) && s.length > 1) { yPick.selected = s.slice(-1); yPick.set(yPick.cols, yPick.selected); } refresh(); }});
-const types = () => Object.fromEntries(up.sheet().cols.map(c => [c.name, c.type]));
+const types = () => Object.fromEntries(WS.sheetMeta().cols.map(c => [c.name, c.type]));
 const opts = (cols, none) => (none ? '<option value="">None</option>' : '') + cols.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
 
 function setup() {
-  const cols = up.sheet().cols, num = cols.filter(c => c.type === 'number').map(c => c.name), cat = cols.filter(c => c.type !== 'number').map(c => c.name);
+  const cols = WS.sheetMeta().cols, num = cols.filter(c => c.type === 'number').map(c => c.name), cat = cols.filter(c => c.type !== 'number').map(c => c.name);
   $('#x').innerHTML = opts(cols.map(c => c.name)); $('#x').value = (cat[0] || cols[0].name);
   $('#group').innerHTML = opts(cols.map(c => c.name), true);
   yPick.set(num, num.length ? [num[0]] : []);
@@ -22,13 +30,13 @@ function setup() {
 }
 function controls() {
   const t = $('#type').value, tp = types(), isDate = tp[$('#x').value] === 'date', hist = t === 'hist', sc = t === 'scatter', pie = t === 'pie' || t === 'donut';
-  const numCols = up.sheet().cols.filter(c => c.type === 'number').map(c => c.name);
-  const xCols = (hist || sc) ? numCols : up.sheet().cols.map(c => c.name), cur = $('#x').value;
+  const numCols = WS.sheetMeta().cols.filter(c => c.type === 'number').map(c => c.name);
+  const xCols = (hist || sc) ? numCols : WS.sheetMeta().cols.map(c => c.name), cur = $('#x').value;
   $('#x').innerHTML = opts(xCols); $('#x').value = xCols.includes(cur) ? cur : (xCols[0] || '');
   const showAgg = !hist && !sc;
   $('#xl').firstChild.textContent = hist ? 'Number column' : sc ? 'X axis (number)' : 'X axis (categories)';
   $('#yw').hidden = hist || (showAgg && ['count'].includes($('#agg').value));
-  const allCols = up.sheet().cols.map(c => c.name), ycols = (sc || ['sum', 'avg', 'min', 'max'].includes($('#agg').value)) ? numCols : allCols;
+  const allCols = WS.sheetMeta().cols.map(c => c.name), ycols = (sc || ['sum', 'avg', 'min', 'max'].includes($('#agg').value)) ? numCols : allCols;
   yPick.set(ycols, yPick.selected.filter(c => ycols.includes(c)));
   $('#aggw').hidden = !showAgg; $('#gw').hidden = hist || pie; $('#pw').hidden = !(showAgg && isDate);
   $('#sw').hidden = !showAgg; $('#lw').hidden = !showAgg; $('#bw').hidden = !hist; $('#stw').hidden = !['bar', 'hbar', 'area'].includes(t);
@@ -40,7 +48,7 @@ async function refresh() {
   if (!hist && !sc && agg !== 'count' && !ys.length) { $('#chart').innerHTML = '<p class="muted center">Choose a value column to chart, or set “Combine values with” to Count.</p>'; return; }
   if (sc && !ys.length) { $('#chart').innerHTML = '<p class="muted center">Choose a number column for the Y axis.</p>'; return; }
   const my = ++seq;
-  const j = await api('/api/tools/chart/data', {token: up.info.token, sheet: up.sheetName, type: t, x: $('#x').value, ys, agg, group: $('#group').value || null, part: $('#part').value || null,
+  const j = await api('/api/tools/chart/data', {...WS.params(), type: t, x: $('#x').value, ys, agg, group: $('#group').value || null, part: $('#part').value || null,
     sort: $('#sort').value, limit: +$('#limit').value || 30, bins: +$('#bins').value || 20});
   if (my !== seq) return;
   if (!j) { $('#chart').innerHTML = ''; return; }
@@ -179,7 +187,7 @@ const redo = debounce(refresh, 300), style = debounce(render, 120);
 ['#title', '#pal', '#stacked', '#values', '#legend'].forEach(s => $(s).addEventListener('input', style));
 document.addEventListener('themechange', render);
 addEventListener('resize', debounce(render, 200));
-const fname = () => (up.info ? up.info.name.replace(/\.[^.]+$/, '') : 'chart') + '-chart';
+const fname = () => (WS.fileMeta() ? WS.fileMeta().name.replace(/\.[^.]+$/, '') : 'chart') + '-chart';
 $('#dsvg').onclick = () => svgText ? saveBlob(new Blob([svgText], {type: 'image/svg+xml'}), fname() + '.svg') : msg('Make a chart first.');
 $('#dpng').onclick = () => {
   if (!svgText) return msg('Make a chart first.');
@@ -199,3 +207,4 @@ $('#dcsv').onclick = () => {
     : [[data.x_title].concat(data.series.map(s => s.name))].concat(data.labels.map((l, i) => [l].concat(data.series.map(s => s.values[i]))));
   saveBlob(new Blob(['\ufeff' + rows.map(r => r.map(q).join(',')).join('\n')], {type: 'text/csv'}), fname() + '-data.csv');
 };
+WS.init();

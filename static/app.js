@@ -3,77 +3,33 @@ const CMP = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'];
 const numCol = col => !!sheet().cols.find(c => c.name === col)?.numeric;
 const opsFor = col => numCol(col) ? [...CMP, 'contains', 'empty', 'filled'] : ['contains', 'starts', ...CMP, 'empty', 'filled'];
 const newPivot = () => ({rows: [], cols: [], values: [{fn: 'count', cols: []}], totals: true});
-const S = {token: null, sheets: [], sid: 0, search: '', filters: [], picks: {}, pivot: newPivot(), sort: null, page: 1};
+const S = {search: '', filters: [], picks: {}, pivot: newPivot(), sort: null, page: 1};
 const pivotOn = () => S.pivot.rows.length > 0;
-const sheet = () => S.sheets.find(s => s.id === S.sid);
-const spec = () => ({token: S.token, sheet: S.sid, search: S.search, sort: S.sort, page: S.page,
+const sheet = () => WS.sheetMeta();
+const spec = () => ({...WS.params(), search: S.search, sort: S.sort, page: S.page,
   filters: S.filters.filter(f => f.col && (['empty', 'filled'].includes(f.op) || (f.value !== '' && (!numCol(f.col) || !CMP.includes(f.op) || !isNaN(Number(f.value)))))),
   picks: Object.entries(S.picks).map(([col, p]) => ({col, mode: p.mode, values: p.vals, blank: p.blank})), pivot: pivotOn() ? S.pivot : null});
 
 
-// upload
-const sendFile = fd => sendForm('/api/upload', fd);
-function showApp() {  // the start cards fade out, then the workspace slides in
-  $('#exp').hidden = false; $('#closeBtn').hidden = false;
-  const d = $('#drop'), a = $('#app');
-  if (d.hidden) { a.hidden = false; return; }  // replacing an open file: no animation needed
-  d.classList.add('leaving');
-  setTimeout(() => {
-    d.hidden = true; d.classList.remove('leaving');
-    if (!S.token) { d.hidden = false; return; }  // the file was closed in the meantime
-    a.hidden = false; a.classList.add('enter'); setTimeout(() => a.classList.remove('enter'), 800);
-  }, 480);
+// the open file comes from the workspace (see workspace.js)
+WS.dropzone($('#up'), {title: 'Open a file to view'});
+WS.bar($('#wsbar'));
+let seen = '';
+function render() {  // runs whenever the workspace changes: another file, sheet or header row starts a fresh view
+  const s = WS.sheetMeta(); $('#up').hidden = !!s; $('#exp').hidden = !s; $('#app').hidden = !s;
+  if (WS.key() === seen) return;
+  seen = WS.key();
+  Object.assign(S, {search: '', filters: [], picks: {}, pivot: newPivot(), sort: null, page: 1});
+  if (!s) return;
+  $('#search').value = ''; $('#vcol').innerHTML = colOpts(''); $('#vq').value = '';
+  drawF(); drawP(); drawStats(); run();
 }
-async function upload(file) {
-  msg(''); const fd = new FormData(); fd.append('file', file);
-  loadUI.show('Uploading ' + file.name);
-  let r, j;
-  try { const x = await sendFile(fd); r = {ok: x.ok}; j = x.j; }
-  catch (e) { loadUI.hide(); return msg('Upload failed. Check that the server is still running.'); }
-  loadUI.hide();
-  if (!r.ok || !j.sheets.length) {
-    if (r.ok) post('/api/close', {token: j.token});
-    return msg(r.ok ? 'This file has no data.' : j.error);
-  }
-  if (S.token) post('/api/close', {token: S.token});  // free the previous file
-  Object.assign(S, {token: j.token, sheets: j.sheets});
-  showApp();
-  openSheet(j.sheets[0].id);
-}
+WS.on(render);
 function drawStats() {
   const s = sheet(), n = t => s.cols.filter(c => c.type === t).length;
   $('#stats').innerHTML = [[s.rows.toLocaleString(), 'Rows'], [s.cols.length, 'Columns'], [n('number'), 'Number columns'], [n('text'), 'Text columns'], [n('date') + n('bool'), 'Date or true/false']]
     .map(([v, l]) => `<div class="glass stat"><b>${v}</b><span class="muted">${l}</span></div>`).join('');
 }
-$('#pick').onclick = () => $('#file').click();
-$('#sample').onclick = () => {  // small generated dataset so the app can be tried without a file
-  let seed = 7, rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const regions = ['North', 'South', 'East', 'West'], items = ['Laptop', 'Monitor', 'Keyboard', 'Mouse', 'Dock'], rows = ['Region,Product,Year,Quarter,Units,Revenue'];
-  for (let i = 0; i < 240; i++) { const u = 1 + Math.floor(rnd() * 60); rows.push([regions[i % 4], items[Math.floor(rnd() * 5)], 2023 + (i % 3), 'Q' + (1 + Math.floor(rnd() * 4)), u, (u * (20 + rnd() * 380)).toFixed(2)].join(',')); }
-  upload(new File([rows.join('\n')], 'sample-sales.csv', {type: 'text/csv'}));
-};
-function closeFile() {
-  if (S.token) post('/api/close', {token: S.token});
-  Object.assign(S, {token: null, sheets: [], sid: 0, search: '', filters: [], picks: {}, pivot: newPivot(), sort: null, page: 1});
-  ['#app', '#exp', '#closeBtn', '#pF', '#pP'].forEach(s => $(s).hidden = true);
-  $('#exp').open = false; $('#drop').hidden = false; $('#drop').classList.add('enter'); setTimeout(() => $('#drop').classList.remove('enter'), 800); $('#search').value = '';
-  $('#grid').innerHTML = ''; $('#pager').innerHTML = ''; $('#count').textContent = ''; msg('');
-}
-$('#closeBtn').onclick = closeFile;
-$('#file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) upload(f); };  // reset so the same file can be picked again
-const dz = $('#dz');
-['dragover', 'dragleave', 'drop'].forEach(ev => document.addEventListener(ev, e => {
-  e.preventDefault(); dz.classList.toggle('over', ev === 'dragover');
-  if (ev === 'drop' && e.dataTransfer.files[0]) upload(e.dataTransfer.files[0]);
-}));
-
-function openSheet(id) {
-  Object.assign(S, {sid: id, search: '', filters: [], picks: {}, pivot: newPivot(), sort: null, page: 1});
-  $('#search').value = ''; $('#hdr').value = sheet().hdr; $('#vcol').innerHTML = colOpts(''); $('#vq').value = '';
-  $('#tabs').innerHTML = S.sheets.map(s => `<button role="tab" aria-selected="${s.id === id}" data-id="${s.id}">${esc(s.name)}</button>`).join('');
-  drawF(); drawP(); drawStats(); run();
-}
-$('#tabs').onclick = e => e.target.dataset.id && openSheet(+e.target.dataset.id);
 $('#search').oninput = debounce(e => { S.search = e.target.value; S.page = 1; run(); });
 $('#bF').onclick = () => { $('#pF').hidden = !$('#pF').hidden; loadVals(); };
 
@@ -129,7 +85,7 @@ document.addEventListener('click', e => { if (e.target.closest('[data-clear]')) 
 // value list (pick values, like Excel's filter list)
 async function loadVals() {
   const col = $('#vcol').value;
-  if ($('#pF').hidden || !S.token || !col) return;
+  if ($('#pF').hidden || !WS.token || !col) return;
   const my = ++valId;
   const r = await post('/api/values', {...spec(), col, q: $('#vq').value}), j = await r.json();
   if (my !== valId) return;
@@ -196,19 +152,6 @@ $('#pP').addEventListener('click', e => {
   drawP(); run();
 });
 
-// header row
-$('#hdr').onchange = async e => {
-  const row = Math.max(1, parseInt(e.target.value) || 1);
-  if (row === sheet().hdr) { e.target.value = row; return; }  // nothing changed, so no re-read
-  loadUI.show('Reading sheet…'); loadUI.wait('');
-  const r = await fetch('/api/header', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({token: S.token, sheet: S.sid, row})});
-  const j = await r.json(); loadUI.hide();
-  if (!r.ok) { e.target.value = sheet().hdr; return msg(j.error); }
-  Object.assign(sheet(), j.sheet);
-  Object.assign(S, {search: '', filters: [], picks: {}, pivot: newPivot(), sort: null, page: 1});
-  e.target.value = row; $('#search').value = ''; $('#vcol').innerHTML = colOpts(''); drawF(); drawP(); drawStats(); run();
-};
-
 // export
 $('#exp').addEventListener('click', async e => {
   const fmt = e.target.dataset.fmt; if (!fmt) return;
@@ -223,3 +166,4 @@ $('#exp').addEventListener('click', async e => {
 // close the export menu when tapping elsewhere or pressing Escape
 document.addEventListener('click', e => { if (!e.target.closest('#exp')) $('#exp').open = false; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#exp').open = false; });
+WS.init();

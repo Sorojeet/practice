@@ -3,8 +3,10 @@ import os, re, tempfile, time, uuid
 import duckdb
 from flask import Flask, Response, after_this_request, jsonify, redirect, render_template, request, send_file
 
-from engine import cell, file_kind, kind_of, q, read_frames, read_one, rm, to_duckdb, write_csv, write_xlsx
-from tools_api import MAX_ROWS, bp as tools_bp
+import workspace
+from engine import cell, q, write_csv, write_xlsx
+from tools_api import bp as tools_bp
+from workspace import MAX_ROWS, UserError, bp as ws_bp
 from tools_registry import HOME, SITE, ready_tools
 
 app = Flask(__name__)
@@ -12,6 +14,7 @@ ASSET_V = str(int(time.time()))  # changes on every restart, so browsers fetch n
 MAX_MB = int(os.environ.get("MAX_UPLOAD_MB", "0"))  # 0 = no limit (set it on small servers)
 if MAX_MB:
     app.config["MAX_CONTENT_LENGTH"] = MAX_MB * 1024 * 1024
+app.register_blueprint(ws_bp)
 app.register_blueprint(tools_bp)
 
 
@@ -27,11 +30,11 @@ def too_large(_):
 
 
 def _tool_page(tool):
-    return lambda: render_template(f"tools/{tool['slug']}.html", page=tool)
+    return lambda: render_template(tool["template"], page=tool)
 
 
-for _t in ready_tools():  # one clean URL per finished tool: /tools/<slug>
-    app.add_url_rule(f"/tools/{_t['slug']}", endpoint=f"tool_{_t['slug']}", view_func=_tool_page(_t))
+for _t in ready_tools():  # one clean URL per finished page: /viewer and /tools/<slug>
+    app.add_url_rule(_t["path"], endpoint=f"tool_{_t['slug']}", view_func=_tool_page(_t))
 
 
 @app.get("/tools")
@@ -52,34 +55,13 @@ def robots():
 @app.get("/sitemap.xml")
 def sitemap():
     base = SITE["url"].rstrip("/")
-    urls = [("/", "1.0")] + [(f"/tools/{t['slug']}", "0.8") for t in ready_tools()]
+    urls = [("/", "1.0")] + [(t["path"], "0.8") for t in ready_tools()]
     xml = "".join(f"<url><loc>{base}{u}</loc><priority>{pr}</priority></url>" for u, pr in urls)
     return Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + xml + "</urlset>",
                     mimetype="application/xml")
-SESS, TTL, FULL_MAX, PAGE = {}, 7200, 10_000, 500
+FULL_MAX, PAGE = 10_000, 500
 AGG = {"sum": "SUM", "avg": "AVG", "min": "MIN", "max": "MAX"}
 OPS = ("contains", "eq", "ne", "starts", "gt", "gte", "lt", "lte", "empty", "filled")
-
-
-def drop(k):
-    v = SESS.pop(k)
-    v["con"].close()
-    if v.get("path"):
-        try:
-            os.remove(v["path"])
-        except OSError:
-            pass
-
-
-def register(c, i, d, name, hdr):
-    to_duckdb(c, f"t{i}", d)
-    return {"id": i, "name": name, "rows": d.height, "hdr": hdr,
-            "cols": [{"name": n, "numeric": d[n].dtype.is_numeric(), "type": kind_of(d[n].dtype)} for n in d.columns]}
-
-
-def load(path, name):
-    con = duckdb.connect()
-    return con, [register(con, i, d, n, 1) for i, (n, d) in enumerate(read_frames(path, name))], file_kind(name)
 
 
 def pivot_sql(pv, cols, base, params, con, need):
@@ -186,7 +168,7 @@ def build(spec, sheet, con=None):
             where.append("(" + " OR ".join(hit) + ")" if hit else "FALSE")
         elif hit:
             where.append("NOT (" + " OR ".join(hit) + ")")
-    base = f"FROM t{sheet['id']}" + (" WHERE " + " AND ".join(where) if where else "")
+    base = f"FROM {q(sheet['table'])}" + (" WHERE " + " AND ".join(where) if where else "")
     pv = spec.get("pivot")
     if pv and pv.get("rows"):  # pivot table
         return pivot_sql(pv, cols, base, params, con, need)
@@ -198,66 +180,15 @@ def build(spec, sheet, con=None):
 
 
 def prep(spec):
-    s = SESS.get(spec.get("token"))
-    if not s:
-        raise KeyError("This session has expired. Upload the file again.")
-    s["t"] = time.time()
-    sheet = next(x for x in s["sheets"] if x["id"] == spec["sheet"])
-    return (s, sheet) + build(spec, sheet, s["con"].cursor())
+    """The workspace, the sheet's metadata and the SQL for the viewer's current settings."""
+    ws = workspace.get(spec.get("ws"))
+    _, sheet = workspace.find(ws, spec.get("file"), spec.get("sheet"))
+    return (ws, sheet) + build(spec, sheet, ws["con"].cursor())
 
 
 @app.get("/")
 def index():
     return render_template("index.html", page=HOME)
-
-
-@app.post("/api/upload")
-def upload():
-    f = request.files.get("file")
-    if not f or not f.filename:
-        return jsonify(error="No file received."), 400
-    now = time.time()
-    for k in [k for k, v in SESS.items() if now - v["t"] > TTL]:
-        drop(k)
-    fd, path = tempfile.mkstemp(suffix=os.path.splitext(f.filename)[1])
-    os.close(fd)
-    try:
-        f.save(path)
-        con, sheets, kind = load(path, f.filename)
-    except Exception as e:
-        rm(path)
-        return jsonify(error=f"Could not read this file: {e}"), 400
-    token = uuid.uuid4().hex
-    SESS[token] = {"con": con, "sheets": sheets, "t": now, "path": path, "kind": kind}
-    return jsonify(token=token, name=f.filename, sheets=sheets, kind=kind)
-
-
-@app.post("/api/header")
-def header():
-    j = request.get_json()
-    s = SESS.get(j.get("token"))
-    if not s:
-        return jsonify(error="This session has expired. Upload the file again."), 400
-    try:
-        row = int(j.get("row", 1))
-        sh = next(x for x in s["sheets"] if x["id"] == j["sheet"])
-        if row < 1:
-            raise ValueError("Header row must be 1 or higher.")
-        d = read_one(s["path"], s["kind"], sh["name"], row)
-        if not d.width:
-            raise ValueError("No columns found at that row.")
-        sh.update(register(s["con"].cursor(), sh["id"], d, sh["name"], row))
-    except Exception as e:
-        return jsonify(error=f"Could not use row {j.get('row')} as the header: {e}"), 400
-    return jsonify(sheet=sh)
-
-
-@app.post("/api/close")
-def close():
-    t = (request.get_json(silent=True) or {}).get("token")
-    if t in SESS:
-        drop(t)
-    return jsonify(ok=True)
 
 
 @app.post("/api/values")

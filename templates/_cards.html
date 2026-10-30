@@ -1,9 +1,9 @@
 <section class="explore" id="tools" aria-labelledby="exploreh">
-  <h2 id="exploreh">Explore more tools</h2>
-  <p class="muted">Free tools that open the same Excel and CSV files. Nothing to install.</p>
+  <h2 id="exploreh">Choose a tool</h2>
+  <p class="muted">Upload your file below once, then open any tool with it. Nothing to install.</p>
   <div class="cards">
     {% for t in tools %}
-    <a class="glass tool-card" href="/tools/{{ t.slug }}">
+    <a class="glass tool-card" href="{{ t.path }}">
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ t.icon | safe }}</svg>
       <h3>{{ t.name }}</h3><p>{{ t.tagline }}</p><span class="go">Open tool →</span>
     </a>

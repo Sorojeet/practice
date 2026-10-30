@@ -1,6 +1,6 @@
 // Data Cleaner: build a list of cleaning steps, run them on the server, preview and download the result.
 const yes = [['', 'Choose…']];
-const colList = () => (up.sheet() ? up.sheet().cols.map(c => c.name) : []);
+const colList = () => (WS.sheetMeta() ? WS.sheetMeta().cols.map(c => c.name) : []);
 const COLS = {k: 'cols', t: 'cols', label: 'Columns (none selected = all that apply)'};
 const OPS = {
   trim: {label: 'Trim spaces', help: 'Removes spaces at the start and end of text cells.', fields: [COLS, {k: 'collapse', t: 'bool', label: 'Also shrink repeated spaces inside text'}]},
@@ -22,10 +22,19 @@ const OPS = {
 };
 let steps = [], ranOnce = false;
 
-const up = Uploader($('#up'), {title: 'Choose a file to clean', onLoad: u => { steps = []; ranOnce = false; $('#work').hidden = !u; $('#results').hidden = true; if (u) { drawSteps(); drawCols(); } }});
+WS.dropzone($('#up'), {title: 'Choose a file to clean'});
+WS.bar($('#wsbar'));
+let seen = '';
+function render() {  // runs whenever the workspace changes: another file, sheet or header row starts fresh
+  const s = WS.sheetMeta(); $('#up').hidden = !!s; $('#work').hidden = !s;
+  if (WS.key() === seen) return;
+  seen = WS.key(); steps = []; ranOnce = false; $('#results').hidden = true;
+  if (s) { drawSteps(); drawCols(); }
+}
+WS.on(render);
 
 function drawCols() {
-  const cols = up.sheet().cols;
+  const cols = WS.sheetMeta().cols;
   $('#colsum').innerHTML = `<h2>Columns in this sheet</h2><div class="chips">${cols.map(c => `<span class="chip ghost">${esc(c.name)}<small class="ty">${TY[c.type]}</small></span>`).join('')}</div>`;
 }
 const fieldHTML = (st, f, i) => {
@@ -66,7 +75,7 @@ $('#steps').addEventListener('change', e => { const k = e.target.dataset.k, el =
 $('#run').onclick = async () => {
   if (!steps.length) return msg('Add at least one cleaning step.');
   loadUI.show('Cleaning data'); loadUI.wait('');
-  const j = await api('/api/tools/clean/run', {token: up.info.token, sheet: up.sheetName, steps});
+  const j = await api('/api/tools/clean/run', {...WS.params(), steps});
   loadUI.hide(); if (!j) return;
   ranOnce = true; msg('');
   $('#results').hidden = false;
@@ -76,6 +85,11 @@ $('#run').onclick = async () => {
   $('#note').textContent = j.truncated ? `Showing the first ${j.rows.length} of ${j.after.rows.toLocaleString()} rows. The download contains every row.` : `${j.after.rows.toLocaleString()} rows`;
   $('#results').scrollIntoView({behavior: 'smooth', block: 'start'});
 };
-const dl = fmt => download('/api/tools/clean/download', {token: up.info.token, fmt}, `cleaned.${fmt}`);
+const dl = fmt => download('/api/tools/clean/download', {ws: WS.token, fmt}, `cleaned.${fmt}`);
 $('#dxlsx').onclick = () => dl('xlsx');
 $('#dcsv').onclick = () => dl('csv');
+$('#save').onclick = async () => {  // keep the cleaned sheet as a new file that every tool can use
+  const r = await api('/api/tools/clean/save', {ws: WS.token});
+  if (r) { WS.adopt(r, r.file); msg('Saved. The cleaned data is now your open file in the viewer and every tool.', true); }
+};
+WS.init();

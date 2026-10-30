@@ -1,76 +1,15 @@
-"""API behind the tool pages. Data stays in memory for one hour and is discarded afterwards."""
-import functools, math, os, re, tempfile, time, uuid
+"""API behind the tool pages. They work on the files in the shared workspace (see workspace.py)."""
+import math, os, re, tempfile
 
 import duckdb
 import polars as pl
-from flask import Blueprint, after_this_request, current_app, jsonify, request, send_file
+from flask import Blueprint, after_this_request, jsonify, request, send_file
 
-from engine import (cell, chunked, kind_of, q, read_frames, rm, to_duckdb, uniq, write_csv, write_xlsx)
+from engine import cell, chunked, kind_of, q, rm, uniq, write_csv, write_xlsx, to_duckdb
+from workspace import UserError, add_file, api, body, find, get as get_ws, sheet_df, state
 
 bp = Blueprint("tools", __name__, url_prefix="/api/tools")
-TS, TTL, MAX_SESSIONS = {}, 3600, 30
-MAX_ROWS = int(os.environ.get("TOOL_MAX_ROWS", 1_000_000))
 PREVIEW, MAX_STEPS, MAX_CATS, MAX_GROUPS, MAX_POINTS = 200, 30, 500, 12, 5000
-ALLOWED = (".xlsx", ".xlsm", ".xls", ".xlsb", ".ods", ".csv", ".tsv", ".txt")
-
-
-class UserError(ValueError):
-    """A problem the user can fix; the message is shown to them."""
-
-
-def api(fn):
-    @functools.wraps(fn)
-    def wrapper(*a, **k):
-        try:
-            return fn(*a, **k)
-        except UserError as e:
-            return jsonify(error=str(e)), 400
-        except (duckdb.Error, pl.exceptions.PolarsError) as e:
-            return jsonify(error=f"This data could not be processed: {e}"), 400
-        except Exception:
-            current_app.logger.exception("tool error")
-            return jsonify(error="Something went wrong while processing the file. Please try again."), 500
-    return wrapper
-
-
-# ---------- sessions ----------
-def _drop(k):
-    s = TS.pop(k, None)
-    if s and s.get("con"):
-        try:
-            s["con"].close()
-        except Exception:
-            pass
-
-
-def new_session(**kw):
-    now = time.time()
-    for k in [k for k, v in TS.items() if now - v["t"] > TTL]:
-        _drop(k)
-    while len(TS) >= MAX_SESSIONS:
-        _drop(min(TS, key=lambda k: TS[k]["t"]))
-    token = uuid.uuid4().hex
-    TS[token] = {"t": now, **kw}
-    return token
-
-
-def session(token):
-    s = TS.get(token)
-    if not s:
-        raise UserError("This session has expired. Upload the file again.")
-    s["t"] = time.time()
-    return s
-
-
-def frame(s, sheet):
-    d = s.get("frames", {}).get(sheet)
-    if d is None:
-        raise UserError("Sheet not found. Upload the file again.")
-    return d
-
-
-def body():
-    return request.get_json(silent=True) or {}
 
 
 def cols_info(d):
@@ -97,43 +36,6 @@ def temp(fmt):
     fd, path = tempfile.mkstemp(suffix="." + fmt)
     os.close(fd)
     return path
-
-
-# ---------- upload / close ----------
-@bp.post("/upload")
-@api
-def upload():
-    f = request.files.get("file")
-    if not f or not f.filename:
-        raise UserError("Choose a file first.")
-    ext = os.path.splitext(f.filename)[1].lower()
-    if ext not in ALLOWED:
-        raise UserError("Unsupported file type. Use xlsx, xls, xlsb, ods, csv, tsv or txt.")
-    path = temp(ext.lstrip("."))
-    try:
-        f.save(path)
-        frames = read_frames(path, f.filename)
-    except Exception as e:
-        raise UserError(f"Could not read this file: {e}")
-    finally:
-        rm(path)
-    if not frames:
-        raise UserError("This file has no data.")
-    for n, d in frames:
-        if d.height > MAX_ROWS:
-            raise UserError(f"Sheet '{n}' has {d.height:,} rows. This tool handles up to {MAX_ROWS:,} rows per sheet.")
-    token = new_session(frames=dict(frames), name=f.filename)
-    return jsonify(token=token, name=f.filename,
-                   sheets=[{"name": n, "rows": d.height, "cols": cols_info(d)} for n, d in frames])
-
-
-@bp.post("/close")
-@api
-def close():
-    t = body().get("token")
-    if t in TS:
-        _drop(t)
-    return jsonify(ok=True)
 
 
 # =====================================================================================
@@ -353,8 +255,9 @@ CLEAN_OPS = {"trim": ("Trim spaces", op_trim), "empty_rows": ("Remove empty rows
 @api
 def clean_run():
     j = body()
-    s = session(j.get("token"))
-    df, steps = frame(s, j.get("sheet")), j.get("steps") or []
+    ws = get_ws(j.get("ws"))
+    f, sh = find(ws, j.get("file"), j.get("sheet"))
+    df, steps = sheet_df(ws, f["id"], sh["id"]), j.get("steps") or []
     if not steps:
         raise UserError("Add at least one cleaning step.")
     if len(steps) > MAX_STEPS:
@@ -371,7 +274,7 @@ def clean_run():
         except pl.exceptions.PolarsError as e:
             raise UserError(f"Step {i} ({label}) could not be applied: {e}")
         log.append({"step": i, "label": label, "message": m})
-    s["clean"] = {"sheet": j.get("sheet"), "df": df}
+    ws["clean"] = {"name": f["name"], "sheet": sh["name"], "df": df}
     return jsonify(before={"rows": start.height, "cols": start.width}, after={"rows": df.height, "cols": df.width},
                    log=log, columns=cols_info(df), rows=preview(df), truncated=df.height > PREVIEW)
 
@@ -380,8 +283,8 @@ def clean_run():
 @api
 def clean_download():
     j = body()
-    s, fmt = session(j.get("token")), j.get("fmt")
-    res = s.get("clean")
+    ws, fmt = get_ws(j.get("ws")), j.get("fmt")
+    res = ws.get("clean")
     if not res:
         raise UserError("Apply the cleaning steps first.")
     if fmt not in ("xlsx", "csv"):
@@ -391,7 +294,20 @@ def clean_download():
         write_csv(path, d.columns, chunked(d))
     else:
         write_xlsx(path, [(res["sheet"], d.columns, chunked(d))])
-    return send_temp(path, f"{stem(s['name'])}_cleaned.{fmt}")
+    return send_temp(path, f"{stem(res['name'])}_cleaned.{fmt}")
+
+
+@bp.post("/clean/save")
+@api
+def clean_save():
+    """Keep the cleaned sheet as a new file in the workspace, so the viewer and the other tools can use it."""
+    j = body()
+    ws = get_ws(j.get("ws"))
+    res = ws.get("clean")
+    if not res:
+        raise UserError("Apply the cleaning steps first.")
+    f = add_file(ws, f"{stem(res['name'])} (cleaned)", [(res["sheet"], res["df"])])
+    return jsonify(state(ws, j.get("ws"), file=f["id"]))
 
 
 # =====================================================================================
@@ -415,7 +331,10 @@ def compare_side(tag, tbl, df, keys, norm_key):
 def compare_run():
     j = body()
     ja, jb = j.get("a") or {}, j.get("b") or {}
-    A, B = frame(session(ja.get("token")), ja.get("sheet")), frame(session(jb.get("token")), jb.get("sheet"))
+    ws = get_ws(j.get("ws"))
+    fa, _ = find(ws, ja.get("file"), ja.get("sheet"))
+    fb, _ = find(ws, jb.get("file"), jb.get("sheet"))
+    A, B = sheet_df(ws, ja.get("file"), ja.get("sheet")), sheet_df(ws, jb.get("file"), jb.get("sheet"))
     ca, cb = list(A.columns), list(B.columns)
     common = [c for c in ca if c in cb]
     if not common:
@@ -493,8 +412,14 @@ def compare_run():
                "changed": counts.get("changed", 0), "same": counts.get("same", 0), "mode": "key" if keys else "position",
                "keys": keys, "only_a": [c for c in ca if c not in cb], "only_b": [c for c in cb if c not in ca],
                "dups_a": dups[0], "dups_b": dups[1], "col_diffs": [{"column": c, "count": n} for c, n in per_col.items()]}
-    token = new_session(con=con, compare={"sql": sql, "summary": summary}, name=ja.get("name") or "compare")
-    return jsonify(token=token, summary=summary, **out)
+    old = ws.get("compare")
+    if old:
+        try:
+            old["con"].close()
+        except Exception:
+            pass
+    ws["compare"] = {"con": con, "sql": sql, "summary": summary, "name": f"{stem(fa['name'])}_vs_{stem(fb['name'])}"}
+    return jsonify(summary=summary, **out)
 
 
 def qchunks(cur, sql):
@@ -511,11 +436,11 @@ def qchunks(cur, sql):
 @api
 def compare_download():
     j = body()
-    s, fmt, which = session(j.get("token")), j.get("fmt"), j.get("which", "all")
-    c = s.get("compare")
+    ws, fmt, which = get_ws(j.get("ws")), j.get("fmt"), j.get("which", "all")
+    c = ws.get("compare")
     if not c or fmt not in ("xlsx", "csv") or which not in ("all", "added", "removed", "changed"):
         raise UserError("Run the comparison first.")
-    cur, path = s["con"].cursor(), temp(fmt)
+    cur, path = c["con"].cursor(), temp(fmt)
     sm = c["summary"]
 
     def part(name):
@@ -525,7 +450,7 @@ def compare_download():
             raise UserError("Choose Added, Removed or Changed for a csv download.")
         cols, chunks = part(which)
         write_csv(path, cols, chunks)
-        return send_temp(path, f"{stem(s['name'])}_{which}.csv")
+        return send_temp(path, f"{c['name']}_{which}.csv")
     metrics = [("Rows in file A", sm["rows_a"]), ("Rows in file B", sm["rows_b"]),
                ("Matched by", "key: " + ", ".join(sm["keys"]) if sm["keys"] else "row position"),
                ("Added rows (only in B)", sm["added"]), ("Removed rows (only in A)", sm["removed"]),
@@ -534,7 +459,7 @@ def compare_download():
     metrics += [(f"Changed cells in {d['column']}", d["count"]) for d in sm["col_diffs"]]
     sheets = [("Summary", ["Metric", "Value"], [metrics])] + [(n.capitalize(), *part(n)) for n in ("added", "removed", "changed")]
     write_xlsx(path, sheets)
-    return send_temp(path, f"{stem(s['name'])}_differences.xlsx")
+    return send_temp(path, f"{c['name']}_differences.xlsx")
 
 
 # =====================================================================================
@@ -559,19 +484,20 @@ def natural(label):
 @api
 def chart_data():
     j = body()
-    s = session(j.get("token"))
-    df, kind = frame(s, j.get("sheet")), j.get("type")
+    ws = get_ws(j.get("ws"))
+    _, sh = find(ws, j.get("file"), j.get("sheet"))
+    kind = j.get("type")
     if kind not in ("bar", "hbar", "line", "area", "pie", "donut", "scatter", "hist"):
         raise UserError("Choose a chart type.")
-    types = {c: kind_of(df[c].dtype) for c in df.columns}
+    types = {c["name"]: c["type"] for c in sh["cols"]}
 
     def col(name, what):
-        if name not in df.columns:
+        if name not in types:
             raise UserError(f"Choose the {what} column.")
         return name
-    con = duckdb.connect()
+    con = ws["con"].cursor()  # reads the workspace table directly; nothing is copied
     try:
-        con.register("t", df.to_arrow())
+        con.execute(f"CREATE OR REPLACE TEMP VIEW t AS SELECT * FROM {q(sh['table'])}")
         if kind == "hist":
             x = col(j.get("x"), "number")
             if types[x] != "number":
